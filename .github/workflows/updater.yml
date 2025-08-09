@@ -2,7 +2,7 @@
 on:
   workflow_call:
     inputs:
-      path:
+      description:
         description: Dependency path in the source repository, this can be either a submodule, a .properties file or a shell script.
         type: string
         required: true
