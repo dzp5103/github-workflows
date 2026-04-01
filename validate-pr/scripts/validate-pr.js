@@ -56,7 +56,18 @@ module.exports = async ({ github, context, core }) => {
     return result;
   }
 
-  // --- Step 1: Check if PR author is a maintainer (admin or maintain role) ---
+  // --- Step 1: Skip if a maintainer reopened the PR ---
+  if (context.payload.action === 'reopened') {
+    const sender = context.payload.sender.login;
+    const senderIsMaintainer = await isMaintainer(repo.owner, repo.repo, sender);
+    if (senderIsMaintainer) {
+      core.info(`PR reopened by maintainer ${sender}. Skipping all checks.`);
+      core.setOutput('skipped', 'true');
+      return;
+    }
+  }
+
+  // --- Step 2: Check if PR author is a maintainer (admin or maintain role) ---
   const authorIsMaintainer = await isMaintainer(repo.owner, repo.repo, prAuthor);
   if (authorIsMaintainer) {
     core.info(`PR author ${prAuthor} has admin/maintain access. Skipping.`);
@@ -65,7 +76,7 @@ module.exports = async ({ github, context, core }) => {
   }
   core.info(`PR author ${prAuthor} is not a maintainer.`);
 
-  // --- Step 2: Parse issue references from PR body ---
+  // --- Step 3: Parse issue references from PR body ---
   const body = pullRequest.body || '';
 
   // Match all issue reference formats:
@@ -130,7 +141,7 @@ module.exports = async ({ github, context, core }) => {
     core.setOutput('was-closed', 'true');
   }
 
-  // --- Step 3: No issue references ---
+  // --- Step 4: No issue references ---
   if (issueRefs.length === 0) {
     core.info('No issue references found. Closing PR.');
     await closePR([
@@ -146,7 +157,7 @@ module.exports = async ({ github, context, core }) => {
     return;
   }
 
-  // --- Step 4: Validate each referenced issue ---
+  // --- Step 5: Validate each referenced issue ---
   // A PR is valid if ANY referenced issue passes all checks.
   let hasAssigneeConflict = false;
   let hasNoDiscussion = false;
@@ -221,7 +232,7 @@ module.exports = async ({ github, context, core }) => {
     hasNoDiscussion = true;
   }
 
-  // --- Step 5: No valid issue found — close with the most relevant reason ---
+  // --- Step 6: No valid issue found — close with the most relevant reason ---
   if (hasAssigneeConflict) {
     core.info('Closing PR: referenced issue is assigned to someone else.');
     await closePR([
